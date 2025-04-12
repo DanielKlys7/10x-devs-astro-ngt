@@ -16,7 +16,7 @@
 - id: UUID PRIMARY KEY DEFAULT uuid_generate_v4()  
 - user_id: UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE  
 - club_id: UUID NOT NULL REFERENCES sport_clubs(id) ON DELETE CASCADE  
-- membership_role: VARCHAR(50) NOT NULL  -- np. 'trener', 'czlonek'  
+- membership_role: VARCHAR(50) NOT NULL  -- np. 'admin', 'trainer', 'member'  
 - created_at: TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()  
 - updated_at: TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()  
 - managed_by: UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE  
@@ -25,6 +25,18 @@
 - active_plan_start_date: TIMESTAMP WITH TIME ZONE NULL 
 - active_plan_expires_at: TIMESTAMP WITH TIME ZONE NULL  
 - auto_renew: BOOLEAN NOT NULL DEFAULT FALSE  
+
+**Tabela: club_invitations**  -- przechowuje zaproszenia do dołączenia do klubu
+
+- id: UUID PRIMARY KEY DEFAULT uuid_generate_v4()
+- club_id: UUID NOT NULL REFERENCES sport_clubs(id) ON DELETE CASCADE
+- email: VARCHAR(255) NOT NULL
+- target_role: VARCHAR(50) NOT NULL  -- dozwolone wartości: 'admin', 'trainer', 'member'
+- token: UUID NOT NULL DEFAULT uuid_generate_v4()
+- created_by: UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE
+- created_at: TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+- expires_at: TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (NOW() + INTERVAL '7 days')
+- accepted_at: TIMESTAMP WITH TIME ZONE NULL
 
 **Tabela: pricing_plans**
 
@@ -58,6 +70,7 @@
 - scheduled_at: TIMESTAMP WITH TIME ZONE NOT NULL  
 - duration_minutes: INTEGER  
 - max_seats: INTEGER NOT NULL  
+- trainer_id: UUID REFERENCES auth.users(id) 
 - created_at: TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()  
 - updated_at: TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 
@@ -75,23 +88,42 @@
 2. Relacje między tabelami
 
 - **sport_clubs** → **auth.users**: relacja wiele-do-wielu poprzez tabelę **memberships** (użytkownicy są zarządzani przez supabase-auth).
+- **sport_clubs** → **auth.users**: relacja wiele-do-wielu poprzez tabelę **club_invitations** (zaproszenia do klubów).
 - **pricing_plans**, **analytics_logs** oraz **classes** mają relację jeden-do-wielu z tabelą **sport_clubs** (każdy rekord jest przypisany do konkretnego klubu).
+- **classes** → **auth.users**: relacja jeden-do-jeden poprzez kolumnę trainer_id (trener prowadzący zajęcia).
 
 3. Indeksy
 
 - Automatyczne indeksy na kolumnach PK (id) wszystkich tabel.
 - Unikalny indeks na kolumnie `auth.users.email`.
 - Unikalny indeks na parze (`user_id`, `club_id`) w tabeli **memberships**.
-- Indeks na kolumnie `club_id` w tabelach **pricing_plans**, **analytics_logs** oraz **classes**.
+- Indeks na kolumnie `club_id` w tabelach **pricing_plans**, **analytics_logs**, **classes** oraz **club_invitations**.
+- Indeks na kolumnie `email` i `token` w tabeli **club_invitations** dla szybszego wyszukiwania zaproszeń.
+- Indeks na kolumnie `expires_at` w tabeli **club_invitations** dla efektywnego filtrowania wygasłych zaproszeń.
 - Dodatkowy indeks na kolumnie `scheduled_at` w tabeli **classes** dla optymalizacji zapytań związanych z harmonogramem zajęć.
+- Indeks na kolumnie `trainer_id` w tabeli **classes** dla szybszego wyszukiwania zajęć prowadzonych przez konkretnego trenera.
 
-4. Zasady PostgreSQL (RLS)
+4. Funkcje pomocnicze i triggery
 
-- Wdrożenie polityk RLS na tabelach krytycznych (np. **sport_clubs**, **classes**, **analytics_logs**) w celu ograniczenia dostępu do danych.  
-  Przykładowe zasady RLS mogą wykorzystywać kolumny `club_id`, `user_id` oraz `global_role` (w tabeli **auth.users**) w celu zapewnienia, że użytkownicy mają dostęp jedynie do danych związanych z ich klubem oraz odpowiednimi uprawnieniami.
+- Funkcje pomocnicze dla systemu RBAC:
+  - `auth.user_role()` - zwraca rolę globalną ('administrator' lub 'user')
+  - `auth.is_admin()` - sprawdza czy użytkownik jest administratorem systemu
+  - `auth.user_club_role(club_id)` - zwraca rolę w kontekście klubu
+  - `auth.is_club_admin(club_id)` - sprawdza uprawnienia administratora klubu
+  - `auth.is_club_member(club_id)` - sprawdza członkostwo w klubie
+
+- Funkcje do obsługi zaproszeń:
+  - `accept_club_invitation(invitation_token)` - weryfikuje i akceptuje zaproszenie, dodając użytkownika do klubu
+
+- Triggery:
+  - `check_trainer_club_membership_trigger` - sprawdza czy przypisywany trener należy do klubu i ma odpowiednią rolę
 
 5. Dodatkowe uwagi
 
-- Wszystkie tabele posiadają pola metadanych (`created_at`, `updated_at`), co ułatwia audyt i śledzenie zmian.  
-- Wszystkie operacje modyfikujące dane krytyczne, takie jak rejestracja na zajęcia i aktualizacja liczby dostępnych miejsc, powinny być wykonywane w ramach transakcji, aby zapewnić integralność danych.  
-- Klucze główne w formie UUID zwiększają skalowalność i bezpieczeństwo – do generowania UUID można wykorzystać funkcje takie jak `uuid_generate_v4()` lub `gen_random_uuid()`.
+- System ról wykorzystuje dwa poziomy: 
+  1. Globalne role w `auth.users.global_role` (tylko 'administrator' i 'user')
+  2. Role w kontekście klubu w `memberships.membership_role` ('admin', 'trainer', 'member')
+- Tabela `club_invitations` umożliwia bezpieczne zapraszanie nowych członków do klubu z określonymi rolami
+- Wszystkie operacje modyfikujące dane krytyczne wykonywane są w ramach transakcji, aby zapewnić integralność danych
+- Walidacja przynależności trenera do klubu jest wymuszana przez trigger `check_trainer_club_membership_trigger`
+- Bezpieczeństwo zaproszeń zapewnione przez unikalne tokeny UUID i czas wygaśnięcia

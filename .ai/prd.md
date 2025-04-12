@@ -5,18 +5,26 @@
 Panel Zarządzania Klubami Sportowymi (MVP) to dedykowana platforma multi-tenant umożliwiająca:
 
 - Centralne zarządzanie wieloma niezależnymi klubami sportowymi przez administratorów systemu.
-- Bezpieczne logowanie dla różnych typów użytkowników (administrator systemu, administrator klubu, trener, członek) z użyciem biblioteki bcrypt do hashowania haseł.
+- Bezpieczne logowanie dla różnych typów użytkowników z dobrze zdefiniowanym systemem kontroli dostępu opartym na rolach (RBAC).
 - Zarządzanie użytkownikami, zajęciami, planami cenowymi oraz karnetami w kontekście konkretnego klubu.
+- System zaproszeń umożliwiający administratorom zapraszanie nowych osób do klubu z określoną rolą.
 - Rejestrację oraz przeglądanie grafiku zajęć przez członków klubu.
+- Przypisywanie trenerów do zajęć z walidacją ich przynależności do klubu.
 - Gromadzenie danych analitycznych (historia zajęć, czas treningu, anulowane zapisy) do przyszłego modułu raportowania.
-- Komunikację między frontendem (Astro + React Islands + Tailwind CSS) a backendem (Fastify/Node.js) oraz bazą danych (PostgreSQL + Prisma).
+- Komunikację między frontendem (Astro + React Islands + Tailwind CSS) a backendem (Supabase).
 
 System definiuje następujące role użytkowników:
 
+**Role globalne** (poziom aplikacji):
+
 - **administrator** - zarządza całym systemem, tworzy i zarządza klubami, ma wgląd we wszystkie dane
-- **sportsClubAdmin** - zarządza konkretnym klubem, użytkownikami, zajęciami i karnetami w ramach tego klubu
-- **user** - członek klubu korzystający z usług (zapisy na zajęcia, przeglądanie grafiku)
-- **trainer** - rola przewidziana do przyszłego rozwoju, obecnie bez dedykowanych funkcjonalności
+- **user** - rola bazowa dla wszystkich użytkowników niebędących administratorami
+
+**Role klubowe** (poziom klubu, przechowywane w tabeli memberships):
+
+- **admin** - zarządza konkretnym klubem, użytkownikami, zajęciami i karnetami
+- **trainer** - prowadzi zajęcia w klubie, ma dostęp do informacji o swoich zajęciach
+- **member** - zwykły członek klubu korzystający z usług (zapisy na zajęcia, przeglądanie grafiku)
 
 ## 2. Problem użytkownika
 
@@ -30,39 +38,53 @@ Obecne systemy do zarządzania klubami sportowymi są nieelastyczne i kosztowne,
 ## 3. Wymagania funkcjonalne
 
 1. **Logowanie i rejestracja:**
-   - Centralny portal logowania dla wszystkich typów użytkowników (administrator, sportsClubAdmin, user, trainer).
+   - Centralny portal logowania dla wszystkich typów użytkowników.
    - Administrator systemu może utworzyć nowy klub (nazwa, dane kontaktowe, e-mail, numer telefonu).
    - System wysyła e-mail z linkiem rejestracyjnym dla sportsClubAdmin na wskazany adres.
-   - Użycie bcrypt do bezpiecznego przechowywania haseł.
+   - Użycie Supabase Auth do bezpiecznego uwierzytelniania.
 
-2. **Zarządzanie klubami i użytkownikami:**
+2. **System Kontroli Dostępu Oparty na Rolach (RBAC):**
+   - Dwupoziomowy system ról: globalne (poziom aplikacji) i klubowe (kontekst klubu).
+   - Globalne role ('administrator', 'user') przechowywane w tabeli auth.users.
+   - Role klubowe ('admin', 'trainer', 'member') przechowywane w tabeli memberships.
+   - Uprawnienia egzekwowane przez polityki Row Level Security (RLS) w bazie danych.
+   - Funkcje pomocnicze dla usprawnienia weryfikacji uprawnień (`auth.is_admin()`, `auth.is_club_admin()` itp.).
+
+3. **System Zaproszeń do Klubu:**
+   - Administratorzy systemu i klubu mogą wysyłać zaproszenia e-mail do potencjalnych członków lub administratorów danego klubu.
+   - Zaproszenia zawierają unikalny, bezpieczny token z określonym czasem ważności (domyślnie 7 dni).
+   - Podczas wysyłania zaproszenia określana jest docelowa rola zapraszanej osoby w klubie.
+   - Zaproszenia mogą być akceptowane zarówno przez nowych, jak i istniejących użytkowników.
+   - Po akceptacji zaproszenia użytkownik zostaje dodany do klubu z określoną rolą.
+
+4. **Zarządzanie klubami i użytkownikami:**
    - Administrator systemu może przeglądać, edytować i usuwać kluby.
    - Administrator systemu może dołączyć do wybranego klubu jako user.
    - Administrator systemu ma wgląd we wszystkie dane wszystkich klubów.
-   - SportsClubAdmin zarządza użytkownikami swojego klubu (zapraszanie, przypisywanie ról: sportsClubAdmin, user, trainer).
+   - Admin klubu zarządza użytkownikami swojego klubu poprzez system zaproszeń.
 
-3. **Zarządzanie zajęciami:**
+5. **Zarządzanie zajęciami:**
    - SportsClubAdmin tworzy, przegląda oraz edytuje typy zajęć (nazwa, czas trwania, pojemność, trener, termin) w ramach swojego klubu.
 
-4. **Zarządzanie planami cenowymi oraz karnetami:**
+6. **Zarządzanie planami cenowymi oraz karnetami:**
    - SportsClubAdmin tworzy i przegląda różne typy karnetów/członkostw dla swojego klubu.
    - SportsClubAdmin ręcznie przypisuje plan cenowy do użytkownika w ramach swojego klubu.
 
-5. **Funkcjonalność zapisu:**
+7. **Funkcjonalność zapisu:**
    - User może zapisać się na zajęcia w klubie, do którego należy, po weryfikacji aktywnego karnetu i dostępności miejsc.
 
-6. **Panel użytkownika:**
+8. **Panel użytkownika:**
    - User widzi listę swoich nadchodzących zapisów w ramach swojego klubu.
 
-7. **Backend API:**
+9. **Backend API:**
    - Obsługa logiki biznesowej i komunikacja z bazą danych, z uwzględnieniem izolacji danych między klubami.
 
-8. **Gromadzenie danych:**
-   - Rejestrowanie historii odwiedzonych zajęć, czasu spędzonego na zajęciach oraz liczby anulowanych zapisów (na potrzeby przyszłej analityki) w kontekście konkretnego klubu.
+10. **Gromadzenie danych:**
+    - Rejestrowanie historii odwiedzonych zajęć, czasu spędzonego na zajęciach oraz liczby anulowanych zapisów (na potrzeby przyszłej analityki) w kontekście konkretnego klubu.
 
-9. **Przechowywanie danych użytkownika zgodnie z RODO:**
-   - Odpowiednie zabezpieczenie i izolacja danych osobowych między klubami.
-   - Rozważenie implementacji Row Level Security w bazie danych dla zapewnienia izolacji danych między klubami.
+11. **Przechowywanie danych użytkownika zgodnie z RODO:**
+    - Odpowiednie zabezpieczenie i izolacja danych osobowych między klubami.
+    - Rozważenie implementacji Row Level Security w bazie danych dla zapewnienia izolacji danych między klubami.
 
 ## 4. Granice produktu
 
@@ -167,9 +189,11 @@ W ramach MVP nie są przewidziane:
 ### US-010: Zarządzanie zajęciami przez administratora klubu
 
 - Tytuł: Tworzenie i edycja zajęć w klubie
-- Opis: Administrator klubu może dodawać i edytować zajęcia (nazwa, czas trwania, pojemność, txwrener, termin).
+- Opis: Administrator klubu może dodawać i edytować zajęcia (nazwa, czas trwania, pojemność, trener, termin).
 - Kryteria akceptacji:
   - Formularz umożliwia wprowadzenie wymaganych danych.
+  - Można wybrać trenera z listy dostępnych trenerów klubu.
+  - System weryfikuje czy wybrany trener należy do klubu i ma rolę 'trainer'.
   - Zajęcia po zapisaniu są widoczne w systemie.
   - Edycja zajęć aktualizuje dane w bazie.
 
@@ -235,11 +259,65 @@ W ramach MVP nie są przewidziane:
   - Dane są zapisywane przy każdej interakcji użytkownika (np. zapis na zajęcia, anulowanie) z oznaczeniem przynależności do klubu.
   - Informacje te nie są wyświetlane w interfejsie, lecz dostępne w bazie dla modułu raportowania.
 
+### US-018: Zaproszenie nowego użytkownika z określoną rolą
+
+- Tytuł: Zaproszenie użytkownika z określoną rolą
+- Opis: Administrator klubu lub administrator systemu wysyła zaproszenie na adres email, określając rolę docelową w klubie (admin, trainer, member).
+- Kryteria akceptacji:
+  - Formularz umożliwia wprowadzenie adresu email i wybór roli.
+  - System generuje unikalny token z ograniczonym czasem ważności.
+  - Zaproszenie jest wysyłane emailem i zawiera link z tokenem.
+  - Zaproszenie jest zapisywane w systemie z informacją o klubie, emailu, roli i tokenie.
+
+### US-019: Akceptacja zaproszenia do klubu
+
+- Tytuł: Akceptacja zaproszenia do klubu
+- Opis: Użytkownik otrzymuje email z zaproszeniem do klubu, klika link i zostaje poprawnie dołączony do klubu z odpowiednią rolą.
+- Kryteria akceptacji:
+  - Kliknięcie linku otwiera stronę do akceptacji zaproszenia.
+  - Jeśli użytkownik nie jest zalogowany, zostaje przekierowany do logowania/rejestracji.
+  - System weryfikuje, czy email użytkownika zgadza się z emailem zaproszenia.
+  - Po akceptacji, użytkownik zostaje dodany do klubu z określoną rolą.
+  - Zaproszenie zostaje oznaczone jako zaakceptowane.
+
+### US-020: Zarządzanie zaproszeniami
+
+- Tytuł: Zarządzanie listą zaproszeń
+- Opis: Administrator klubu może przeglądać, filtrować i anulować wysłane zaproszenia.
+- Kryteria akceptacji:
+  - Lista zaproszeń jest dostępna w panelu administracyjnym klubu.
+  - Administrator może filtrować zaproszenia według statusu (oczekujące, zaakceptowane, wygasłe).
+  - Administrator może anulować oczekujące zaproszenia.
+  - System pokazuje datę wygaśnięcia zaproszenia.
+
+### US-021: Weryfikacja uprawnień według roli
+
+- Tytuł: System kontroli dostępu oparty na rolach
+- Opis: System prawidłowo ogranicza dostęp do funkcji i danych w zależności od globalnej roli użytkownika oraz jego roli w klubie.
+- Kryteria akceptacji:
+  - Administrator systemu ma dostęp do wszystkich klubów i funkcji.
+  - Użytkownik z rolą admin w konkretnym klubie ma dostęp tylko do danych tego klubu.
+  - Zwykły członek klubu (member) widzi tylko podstawowe informacje i swoje dane.
+  - Użytkownik nie może wykonywać działań poza swoimi uprawnieniami.
+
+### US-022: Przypisanie trenera do zajęć
+
+- Tytuł: Przypisanie trenera do zajęć klubowych
+- Opis: Administrator klubu przypisuje trenera do konkretnych zajęć, przy czym system weryfikuje czy trener należy do klubu.
+- Kryteria akceptacji:
+  - Administrator może wybrać trenera tylko spośród osób z rolą 'trainer' w danym klubie.
+  - System automatycznie weryfikuje przynależność trenera do klubu.
+  - Próba przypisania osoby niebędącej trenerem w klubie kończy się błędem.
+  - Trener może zobaczyć listę przypisanych do niego zajęć.
+  - Informacja o trenerze jest widoczna w szczegółach zajęć.
+
 ## 6. Metryki sukcesu
 
 - Poprawne i bezpieczne logowanie dla wszystkich ról użytkowników.
 - Skuteczne tworzenie i zarządzanie klubami przez administratora systemu.
 - Sprawne zarządzanie użytkownikami w ramach klubu przez administratora klubu.
+- Efektywny system zaproszeń z poprawnymi przypisaniami ról.
+- Dwupoziomowy system RBAC prawidłowo ograniczający dostęp do zasobów.
 - Pełna funkcjonalność zapisu na zajęcia z aktualizacją dostępności miejsc w kontekście konkretnego klubu.
 - Właściwa izolacja danych między klubami na poziomie UI i logiki biznesowej.
 - Zapis danych analitycznych dla przyszłych analiz z odpowiednim kontekstem klubu.

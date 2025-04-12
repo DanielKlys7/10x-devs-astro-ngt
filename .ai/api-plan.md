@@ -169,15 +169,18 @@
        "description": "string",
        "scheduled_at": "ISO 8601 timestamp",
        "duration_minutes": number,
-       "max_seats": number
+       "max_seats": number,
+       "trainer_id": "UUID"
      }
      ```
+   - **Business Logic:** 
+     - Validate that the trainer belongs to the club with 'trainer' role 
    - **Response:** Newly created class details
 
 2. **GET /api/clubs/{clubId}/classes**
    - **Description:** List classes for a club with support for date filtering, pagination, and sorting.
-   - **Query Parameters:** `page`, `limit`, `date` (or date range)
-   - **Response:** Array of class records with pagination metadata
+   - **Query Parameters:** `page`, `limit`, `date` (or date range), `trainer_id` (optional)
+   - **Response:** Array of class records with pagination metadata 
 
 3. **GET /api/classes/{id}**
    - **Description:** Retrieve details of a specific class.
@@ -242,18 +245,69 @@
 
 ---
 
+### Club Invitations
+
+1. **POST /api/clubs/{clubId}/invitations**
+   - **Description:** Create a new invitation to a club (accessible by club administrators).
+   - **Request Payload:**
+     ```json
+     {
+       "email": "string",
+       "targetRole": "string (admin, trainer, member)"
+     }
+     ```
+   - **Business Logic:** Generate a unique invitation token, validate the target email and role. Send invitation email with the token included in the link.
+   - **Response:** Details of the created invitation
+
+2. **GET /api/clubs/{clubId}/invitations**
+   - **Description:** List all pending invitations for a specific club with pagination.
+   - **Query Parameters:** `page`, `limit`, `status` (optional, default "pending")
+   - **Response:** Array of invitation records with pagination info
+
+3. **GET /api/invitations/{token}**
+   - **Description:** Validate and retrieve details of a specific invitation by token.
+   - **Response:** Invitation details including club name and target role
+
+4. **POST /api/invitations/{token}/accept**
+   - **Description:** Accept an invitation linking the current authenticated user to the club with the specified role.
+   - **Business Logic:**
+     - Verify the token is valid and not expired
+     - Check that the authenticated user's email matches the invitation email
+     - Create membership record with the specified role
+     - Mark invitation as accepted
+   - **Response:** Success message with membership details
+
+5. **DELETE /api/invitations/{id}**
+   - **Description:** Cancel or revoke an invitation (accessible by club administrators).
+   - **Response:** 204 No Content
+
+---
+
 ## 3. Authentication and Authorization
 
 - **Authentication Mechanism:**
   - The API will use JWT-based authentication. Clients will send the token in the `Authorization` header as a Bearer token.
   
 - **Authorization:**
-  - Role-based access control (RBAC) will enforce access policies:
-    - **Administrator:** Full access to all clubs and system-level operations.
-    - **SportsClubAdmin:** Manage resources specific to their club (memberships, classes, pricing plans).
-    - **User:** Access only to their personal data, such as class registrations and limited club information.
-    - **Trainer:** Currently limited access, planned for future enhancements.
-  - Endpoints are secured by middleware that checks the token, extracts user roles, and validates resource ownership.
+  - Role-based access control (RBAC) will enforce access policies using both global and club-specific roles:
+    - **Global Roles** (stored in `auth.users.global_role`):
+      - **administrator:** Full access to all clubs and system-level operations.
+      - **user:** Base access level for regular users.
+    - **Club-Specific Roles** (stored in `memberships.membership_role`):
+      - **admin:** Manage club-specific resources (memberships, classes, pricing plans).
+      - **trainer:** Special access to training-related functions and assigned classes.
+      - **member:** Regular club member with basic access to club features.
+  
+  - Access Control Implementation:
+    - Row Level Security (RLS) policies in the database
+    - Helper functions for role checking: `auth.user_role()`, `auth.is_admin()`, `auth.user_club_role(club_id)`, `auth.is_club_admin(club_id)`, `auth.is_club_member(club_id)`
+    - Endpoint-specific middleware to check permissions for complex operations
+
+- **Invitation System:**
+  - Secure, token-based system for inviting users to clubs
+  - Time-limited tokens with role specification
+  - Email integration for sending invitations
+  - Support for both new user registration and existing user acceptance
 
 ---
 
@@ -284,7 +338,11 @@
   - Endpoints will include rate limiting to prevent abuse.
   - Sensitive operations (e.g., authentication, registration, club management) will have robust error handling and logging.
 
----
+- **Invitation Processing:**
+  - Club invitation tokens are UUID-based and have a limited validity period (default 7 days)
+  - Invitations are tied to specific email addresses and can only be accepted by users with matching emails
+  - Role assignment is predetermined at invitation time and enforced when accepting
+  - Proper error handling for expired invitations, email mismatches, or users already in the club
 
 *Assumptions & Notes:*
 
