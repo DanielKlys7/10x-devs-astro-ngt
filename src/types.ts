@@ -1,24 +1,54 @@
-/**
- * Definicje typów DTO i Command Modeli na podstawie planu API oraz modeli bazy danych.
- */
+import type { Database } from "./db/database.types";
 
+// Typy bazowe z bazy danych Supabase
+type DbTables = Database["public"]["Tables"];
+export type SportClub = DbTables["sport_clubs"]["Row"];
+export type Membership = DbTables["memberships"]["Row"];
+export type PricingPlan = DbTables["pricing_plans"]["Row"];
+export type Class = DbTables["classes"]["Row"];
+export type ClassRegistration = DbTables["class_registrations"]["Row"];
+export type AnalyticsLog = DbTables["analytics_logs"]["Row"];
+export type ClubInvitation = DbTables["club_invitations"]["Row"];
+
+// Typy pomocnicze
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
-/* =================
-   UŻYTKOWNIK / AUTH
-   ================= */
+/**
+ * Wspólne typy i interfejsy
+ */
+export interface PaginationRequest {
+  page?: number;
+  limit?: number;
+}
+
+export interface PaginationResponse {
+  page: number;
+  limit: number;
+  total: number;
+}
+
+export interface ApiSuccessResponse {
+  success: true;
+  message: string;
+}
+
+export interface ApiErrorResponse {
+  success: false;
+  message: string;
+}
+
+/**
+ * Authentication & Registration DTOs
+ */
+export interface LoginRequestDTO {
+  email: string;
+  password: string;
+}
 
 export interface UserDTO {
   id: string;
   email: string;
   role: string;
-  firstName?: string;
-  lastName?: string;
-}
-
-export interface LoginRequestDTO {
-  email: string;
-  password: string;
 }
 
 export interface LoginResponseDTO {
@@ -31,157 +61,322 @@ export interface RegisterRequestDTO {
   lastName: string;
   email: string;
   password: string;
-  inviteToken?: string;
+  inviteToken: string;
 }
 
-export type RegisterResponseDTO = UserDTO;
-
-/* ============================
-   PAGINOWANE ODPOWIEDZI
-   ============================ */
-
-export interface PaginatedResponse<T> {
-  data: T[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-  };
+export interface RegisterResponseDTO {
+  user: UserDTO;
 }
 
-/* ============================
-   KLUBY SPORTOWE (Club)
-   ============================ */
-
-export interface ClubDTO {
-  id: string;
+/**
+ * Sport Clubs DTOs
+ */
+export interface CreateClubRequestDTO {
   name: string;
-  address?: string | null;
+  address?: string;
   contact_email: string;
-  contact_phone?: string | null;
-  created_at: string;
-  updated_at: string;
-  deleted_at?: string | null;
+  contact_phone?: string;
 }
 
-// Komenda do tworzenia klubu – pola pochodzą bezpośrednio z definicji klubu
-export type CreateClubCommand = Omit<ClubDTO, "id" | "created_at" | "updated_at" | "deleted_at">;
+export type CreateClubResponseDTO = SportClub;
 
-// Komenda do aktualizacji klubu – wszystkie pola opcjonalne
-export type UpdateClubCommand = Partial<CreateClubCommand>;
+export interface GetClubsRequestDTO extends PaginationRequest {
+  search?: string;
+}
 
-/* ============================
-   CZŁONKOSTWA (Membership)
-   ============================ */
+export interface GetClubsResponseDTO {
+  clubs: SportClub[];
+  pagination: PaginationResponse;
+}
 
-export interface MembershipDTO {
-  id: string;
-  club_id: string;
-  managed_by: string;
+export type GetClubResponseDTO = SportClub;
+
+export interface UpdateClubRequestDTO {
+  name?: string;
+  address?: string;
+  contact_email?: string;
+  contact_phone?: string;
+}
+
+export type UpdateClubResponseDTO = SportClub;
+
+/**
+ * Memberships DTOs
+ */
+export interface AddMemberRequestDTO {
+  user_id: string;
   membership_role: string;
-  active_plan_expires_at?: string | null;
+  managed_by: string;
+}
+
+export type AddMemberResponseDTO = Membership;
+
+export interface GetMembersRequestDTO extends PaginationRequest {
+  role?: string;
+}
+
+export interface GetMembersResponseDTO {
+  members: Membership[];
+  pagination: PaginationResponse;
+}
+
+export interface UpdateMembershipRequestDTO {
+  membership_role?: string;
   active_plan_pricing_plan_id?: string | null;
   active_plan_start_date?: string | null;
-  auto_renew: boolean;
-  user_id: string;
-  created_at: string;
-  updated_at: string;
+  active_plan_expires_at?: string | null;
+  auto_renew?: boolean;
 }
 
-// Komenda do tworzenia członkostwa – pól wymaganych do stworzenia rekordu
-export type CreateMembershipCommand = Pick<MembershipDTO, "club_id" | "user_id" | "membership_role" | "managed_by">;
+export type UpdateMembershipResponseDTO = Membership;
 
-// Komenda do aktualizacji członkostwa – aktualizujemy rolę, przypisanie planu oraz auto_renew
-export type UpdateMembershipCommand = Partial<
-  Pick<MembershipDTO, "membership_role" | "active_plan_pricing_plan_id" | "auto_renew">
->;
-
-/* ============================
-   CENNIKI (Pricing Plans)
-   ============================ */
-
-export interface PricingPlanDTO {
-  id: string;
-  club_id: string;
+/**
+ * Pricing Plans DTOs
+ */
+export interface CreatePricingPlanRequestDTO {
   name: string;
-  description?: string | null;
+  description?: string;
   price: number;
   number_of_entries: number;
   duration_in_days: number;
-  status: string;
-  created_at: string;
-  updated_at: string;
-  deleted_at?: string | null;
+  status?: string;
 }
 
-// Komenda do tworzenia planu cenowego – pola niezbędne do stworzenia rekordu
-export type CreatePricingPlanCommand = Pick<
-  PricingPlanDTO,
-  "club_id" | "name" | "description" | "price" | "number_of_entries" | "duration_in_days" | "status"
->;
+export type CreatePricingPlanResponseDTO = PricingPlan;
 
-// Komenda do aktualizacji planu cenowego – wszystkie pola poza identyfikatorami i metadanymi aktualizowane częściowo
-export type UpdatePricingPlanCommand = Partial<
-  Omit<PricingPlanDTO, "id" | "club_id" | "created_at" | "updated_at" | "deleted_at">
->;
+export type GetPricingPlansRequestDTO = PaginationRequest;
 
-/* ============================
-   ZAJĘCIA (Classes)
-   ============================ */
+export interface GetPricingPlansResponseDTO {
+  pricing_plans: PricingPlan[];
+  pagination: PaginationResponse;
+}
 
-export interface ClassDTO {
-  id: string;
-  club_id: string;
+export type GetPricingPlanResponseDTO = PricingPlan;
+
+export interface UpdatePricingPlanRequestDTO {
+  name?: string;
+  description?: string;
+  price?: number;
+  number_of_entries?: number;
+  duration_in_days?: number;
+  status?: string;
+}
+
+export type UpdatePricingPlanResponseDTO = PricingPlan;
+
+/**
+ * Classes DTOs
+ */
+export interface CreateClassRequestDTO {
   name: string;
-  description: string;
+  description?: string;
   scheduled_at: string;
-  duration_minutes: number | null;
+  duration_minutes?: number;
   max_seats: number;
-  created_at: string;
-  updated_at: string;
+  trainer_id?: string;
 }
 
-// Komenda do tworzenia zajęć – pola wymagane przy utworzeniu zajęć
-export type CreateClassCommand = Pick<
-  ClassDTO,
-  "club_id" | "name" | "description" | "scheduled_at" | "duration_minutes" | "max_seats"
->;
+export type CreateClassResponseDTO = Class;
 
-// Komenda do aktualizacji zajęć – aktualizujemy częściowo pola niezbędne
-export type UpdateClassCommand = Partial<Omit<ClassDTO, "id" | "club_id" | "created_at" | "updated_at">>;
+export interface GetClassesRequestDTO extends PaginationRequest {
+  date?: string;
+  date_from?: string;
+  date_to?: string;
+  trainer_id?: string;
+}
 
-/* ============================
-   REJESTRACJE NA ZAJĘCIA (Class Registrations)
-   ============================ */
+export interface GetClassesResponseDTO {
+  classes: Class[];
+  pagination: PaginationResponse;
+}
 
-export interface RegistrationDTO {
-  id: string;
-  class_id: string;
+export type GetClassResponseDTO = Class;
+
+export interface UpdateClassRequestDTO {
+  name?: string;
+  description?: string;
+  scheduled_at?: string;
+  duration_minutes?: number;
+  max_seats?: number;
+  trainer_id?: string | null;
+}
+
+export type UpdateClassResponseDTO = Class;
+
+/**
+ * Class Registrations DTOs
+ */
+export interface CreateRegistrationRequestDTO {
   user_id: string;
-  registration_date: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
 }
 
-// Komenda do rejestracji – pola wymagane do stworzenia rekordu rejestracji
-export type CreateRegistrationCommand = Pick<RegistrationDTO, "class_id" | "user_id">;
+export type CreateRegistrationResponseDTO = ClassRegistration;
 
-// Komenda do aktualizacji rejestracji – np. zmiana statusu (potwierdzenie, anulowanie)
-export type UpdateRegistrationCommand = Partial<Pick<RegistrationDTO, "status">>;
+export interface GetRegistrationsRequestDTO extends PaginationRequest {
+  status?: string;
+}
 
-/* ============================
-   LOGI ANALITYCZNE (Analytics Logs)
-   ============================ */
+export interface GetRegistrationsResponseDTO {
+  registrations: ClassRegistration[];
+  pagination: PaginationResponse;
+}
 
-export interface AnalyticsLogDTO {
-  id: string;
+export interface UpdateRegistrationRequestDTO {
+  status: string;
+}
+
+export type UpdateRegistrationResponseDTO = ClassRegistration;
+
+/**
+ * Analytics Logs DTOs
+ */
+export interface CreateAnalyticsLogRequestDTO {
   club_id: string;
   event_type: string;
-  event_data: Json;
-  user_id?: string | null;
-  created_at: string;
+  event_data?: Json;
+  user_id?: string;
 }
 
-// Komenda do tworzenia logu analitycznego – zbieramy niezbędne dane zdarzenia
-export type CreateAnalyticsCommand = Pick<AnalyticsLogDTO, "club_id" | "event_type" | "event_data" | "user_id">;
+export type CreateAnalyticsLogResponseDTO = AnalyticsLog;
+
+export interface GetAnalyticsLogsRequestDTO {
+  clubId?: string;
+  startDate?: string;
+  endDate?: string;
+  event_type?: string;
+}
+
+export interface GetAnalyticsLogsResponseDTO {
+  logs: AnalyticsLog[];
+}
+
+/**
+ * Club Invitations DTOs
+ */
+export interface CreateInvitationRequestDTO {
+  email: string;
+  targetRole: string;
+}
+
+export type CreateInvitationResponseDTO = ClubInvitation;
+
+export interface GetInvitationsRequestDTO extends PaginationRequest {
+  status?: "pending" | "accepted" | "expired";
+}
+
+export interface GetInvitationsResponseDTO {
+  invitations: ClubInvitation[];
+  pagination: PaginationResponse;
+}
+
+export interface GetInvitationResponseDTO extends ClubInvitation {
+  club_name: string;
+}
+
+export interface AcceptInvitationResponseDTO extends ApiSuccessResponse {
+  membership_id: string;
+  club_id: string;
+  role: string;
+}
+
+/**
+ * Command Models
+ */
+
+export interface CreateClubCommand {
+  name: string;
+  address?: string;
+  contact_email: string;
+  contact_phone?: string;
+}
+
+export interface UpdateClubCommand {
+  id: string;
+  name?: string;
+  address?: string;
+  contact_email?: string;
+  contact_phone?: string;
+}
+
+export interface AddMemberCommand {
+  club_id: string;
+  user_id: string;
+  membership_role: string;
+  managed_by: string;
+}
+
+export interface UpdateMembershipCommand {
+  id: string;
+  membership_role?: string;
+  active_plan_pricing_plan_id?: string | null;
+  active_plan_start_date?: string | null;
+  active_plan_expires_at?: string | null;
+  auto_renew?: boolean;
+}
+
+export interface CreatePricingPlanCommand {
+  club_id: string;
+  name: string;
+  description?: string;
+  price: number;
+  number_of_entries: number;
+  duration_in_days: number;
+  status?: string;
+}
+
+export interface UpdatePricingPlanCommand {
+  id: string;
+  name?: string;
+  description?: string;
+  price?: number;
+  number_of_entries?: number;
+  duration_in_days?: number;
+  status?: string;
+}
+
+export interface CreateClassCommand {
+  club_id: string;
+  name: string;
+  description?: string;
+  scheduled_at: string;
+  duration_minutes?: number;
+  max_seats: number;
+  trainer_id?: string;
+}
+
+export interface UpdateClassCommand {
+  id: string;
+  name?: string;
+  description?: string;
+  scheduled_at?: string;
+  duration_minutes?: number;
+  max_seats?: number;
+  trainer_id?: string | null;
+}
+
+export interface CreateRegistrationCommand {
+  class_id: string;
+  user_id: string;
+}
+
+export interface UpdateRegistrationCommand {
+  id: string;
+  status: string;
+}
+
+export interface CreateAnalyticsLogCommand {
+  club_id: string;
+  event_type: string;
+  event_data?: Json;
+  user_id?: string;
+}
+
+export interface CreateInvitationCommand {
+  club_id: string;
+  email: string;
+  targetRole: string;
+}
+
+export interface AcceptInvitationCommand {
+  token: string;
+}

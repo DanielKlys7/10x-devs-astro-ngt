@@ -103,6 +103,7 @@ export interface Database {
           max_seats: number;
           name: string;
           scheduled_at: string;
+          trainer_id: string | null;
           updated_at: string;
         };
         Insert: {
@@ -114,6 +115,7 @@ export interface Database {
           max_seats: number;
           name: string;
           scheduled_at: string;
+          trainer_id?: string | null;
           updated_at?: string;
         };
         Update: {
@@ -125,11 +127,56 @@ export interface Database {
           max_seats?: number;
           name?: string;
           scheduled_at?: string;
+          trainer_id?: string | null;
           updated_at?: string;
         };
         Relationships: [
           {
             foreignKeyName: "classes_club_id_fkey";
+            columns: ["club_id"];
+            isOneToOne: false;
+            referencedRelation: "sport_clubs";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      club_invitations: {
+        Row: {
+          accepted_at: string | null;
+          club_id: string;
+          created_at: string;
+          created_by: string;
+          email: string;
+          expires_at: string;
+          id: string;
+          target_role: string;
+          token: string;
+        };
+        Insert: {
+          accepted_at?: string | null;
+          club_id: string;
+          created_at?: string;
+          created_by: string;
+          email: string;
+          expires_at?: string;
+          id?: string;
+          target_role: string;
+          token?: string;
+        };
+        Update: {
+          accepted_at?: string | null;
+          club_id?: string;
+          created_at?: string;
+          created_by?: string;
+          email?: string;
+          expires_at?: string;
+          id?: string;
+          target_role?: string;
+          token?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "club_invitations_club_id_fkey";
             columns: ["club_id"];
             isOneToOne: false;
             referencedRelation: "sport_clubs";
@@ -279,7 +326,12 @@ export interface Database {
       };
     };
     Views: Record<never, never>;
-    Functions: Record<never, never>;
+    Functions: {
+      accept_club_invitation: {
+        Args: { invitation_token: string };
+        Returns: Json;
+      };
+    };
     Enums: Record<never, never>;
     CompositeTypes: Record<never, never>;
   };
