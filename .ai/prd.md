@@ -311,6 +311,19 @@ W ramach MVP nie są przewidziane:
   - Trener może zobaczyć listę przypisanych do niego zajęć.
   - Informacja o trenerze jest widoczna w szczegółach zajęć.
 
+### US-023: Mozliwosc przejrzenia swoich klubów przez uzytkownika
+
+- Tytuł: Przeglądanie listy klubów przez użytkownika na dashboardzie
+- Opis: Jako użytkownik (`user`), po zalogowaniu się do systemu, chcę mieć możliwość zobaczenia listy wszystkich klubów sportowych, do których należę, na głównym dashboardzie (`/`). Jeśli należę tylko do jednego klubu, chcę być automatycznie przekierowany do widoku tego klubu. Jeśli należę do wielu klubów, chcę widzieć je w formie czytelnej listy lub kart, abym mógł łatwo wybrać, do którego widoku klubu chcę przejść.
+- Kryteria akceptacji:
+  - Po zalogowaniu, użytkownik (`user`) widzi dashboard (`/`).
+  - Jeśli użytkownik jest członkiem tylko jednego klubu, jest automatycznie przekierowywany na ścieżkę `/club/:clubId` tego klubu.
+  - Jeśli użytkownik jest członkiem wielu klubów, na dashboardzie (`/`) wyświetlana jest lista tych klubów (np. w formie kart).
+  - Każdy element listy/karta klubu zawiera podstawowe informacje (np. nazwa klubu, logo).
+  - Każdy element listy/karta klubu zawiera przycisk lub link nawigacyjny do widoku szczegółowego danego klubu (`/club/:clubId`).
+  - Widok jest responsywny i dostępny (zgodność z WCAG AA).
+  - Zawartość dashboardu jest dynamicznie dostosowana do roli użytkownika (w tym przypadku 'user').
+
 ## 6. Metryki sukcesu
 
 - Poprawne i bezpieczne logowanie dla wszystkich ról użytkowników.
