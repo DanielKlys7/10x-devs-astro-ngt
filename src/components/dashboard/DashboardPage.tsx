@@ -7,27 +7,51 @@ import { AdminClubsTable } from "./AdminClubsTable";
 import { CreateClubModal } from "./CreateClubModal";
 import { InviteAdminModal } from "./InviteAdminModal";
 import type { CreateClubRequestDTO, GetClubsResponseDTO, SportClub } from "@/types";
-import { getMockClubsResponse } from "./__mocks__/mockData";
 import queryClient from "@/queryClient";
 
 const ITEMS_PER_PAGE = 10;
 const SEARCH_DEBOUNCE_MS = 300;
 
-// Ustaw na true, aby używać mocków zamiast prawdziwego API
-const USE_MOCKS = true;
-
 export function DashboardPage() {
   const { role, isLoading: isRoleLoading } = useUserRole();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedClub, setSelectedClub] = useState<SportClub | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return parseInt(params.get("page") || "1", 10);
+  });
+  const [searchQuery, setSearchQuery] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("search") || "";
+  });
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
+
+  // Aktualizacja URL przy zmianie parametrów
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+
+    if (currentPage > 1) {
+      params.set("page", currentPage.toString());
+    } else {
+      params.delete("page");
+    }
+
+    if (searchQuery) {
+      params.set("search", searchQuery);
+    } else {
+      params.delete("search");
+    }
+
+    const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}`;
+    window.history.replaceState({}, "", newUrl);
+  }, [currentPage, searchQuery]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearchQuery(searchQuery);
-      setCurrentPage(1); // Reset do pierwszej strony przy wyszukiwaniu
+      if (currentPage !== 1) {
+        setCurrentPage(1); // Reset do pierwszej strony przy wyszukiwaniu
+      }
     }, SEARCH_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
@@ -42,10 +66,6 @@ export function DashboardPage() {
     {
       queryKey: ["clubs", currentPage, debouncedSearchQuery],
       queryFn: async () => {
-        if (USE_MOCKS) {
-          return getMockClubsResponse(currentPage, ITEMS_PER_PAGE, debouncedSearchQuery);
-        }
-
         const searchParams = new URLSearchParams({
           page: currentPage.toString(),
           limit: ITEMS_PER_PAGE.toString(),
@@ -57,7 +77,8 @@ export function DashboardPage() {
 
         const response = await fetch(`/api/clubs?${searchParams.toString()}`);
         if (!response.ok) {
-          throw new Error("Nie udało się pobrać listy klubów");
+          const errorData = await response.json().catch(() => null);
+          throw new Error(errorData?.message || "Nie udało się pobrać listy klubów");
         }
         return response.json();
       },
@@ -84,13 +105,6 @@ export function DashboardPage() {
 
   const handleCreateClubSubmit = async (data: CreateClubRequestDTO) => {
     try {
-      if (USE_MOCKS) {
-        await new Promise((resolve) => setTimeout(resolve, 1000)); // Symulacja opóźnienia
-        await refetchClubs();
-        toast.success("Klub został utworzony pomyślnie");
-        return;
-      }
-
       const response = await fetch("/api/clubs", {
         method: "POST",
         headers: {
@@ -100,19 +114,22 @@ export function DashboardPage() {
       });
 
       if (!response.ok) {
-        throw new Error("Nie udało się utworzyć klubu");
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.message || "Nie udało się utworzyć klubu");
       }
 
       await refetchClubs();
       toast.success("Klub został utworzony pomyślnie");
+      setIsCreateModalOpen(false);
     } catch (error) {
       console.error("Błąd podczas tworzenia klubu:", error);
+      toast.error(error instanceof Error ? error.message : "Nie udało się utworzyć klubu");
       throw error;
     }
   };
 
   const handleInviteAdmin = (clubId: string) => {
-    const club = clubs.find((c) => c.id === clubId);
+    const club = clubsData?.clubs.find((c) => c.id === clubId);
     if (club) {
       setSelectedClub(club);
     }

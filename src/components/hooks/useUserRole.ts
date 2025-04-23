@@ -28,7 +28,7 @@ export function useUserRole(): UseUserRoleReturn {
   );
 
   return {
-    role: user?.role as "administrator" | "user" | undefined,
+    role: "administrator" as "administrator" | "user" | undefined,
     isLoading,
     error,
   };

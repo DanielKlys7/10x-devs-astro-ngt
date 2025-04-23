@@ -10,6 +10,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import type { SportClub, PaginationResponse } from "@/types";
+import { Plus } from "lucide-react";
 
 interface AdminClubsTableProps {
   clubs: SportClub[];
@@ -41,27 +42,32 @@ export function AdminClubsTable({
   const canGoNext = page < totalPages;
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const query = e.target.value;
-    setSearchQuery(query);
-    onSearch(query);
+    const value = e.target.value;
+    setSearchQuery(value);
+    onSearch(value);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault(); // Zapobiegamy domyślnej akcji formularza
   };
 
   return (
-    <div>
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
-        <div className="w-full sm:w-96">
-          <div className="relative">
-            <Input
-              type="search"
-              placeholder="Wyszukaj po nazwie lub adresie..."
-              value={searchQuery}
-              onChange={handleSearch}
-              className="w-full"
-              aria-label="Wyszukaj kluby"
-            />
-          </div>
-        </div>
-        <Button onClick={onCreateClub}>Utwórz klub</Button>
+    <div className="space-y-4">
+      <div className="flex justify-between items-center gap-4">
+        <form onSubmit={handleSubmit} className="w-full max-w-sm">
+          <Input
+            type="search"
+            placeholder="Wyszukaj po nazwie lub adresie..."
+            value={searchQuery}
+            onChange={handleSearch}
+            className="w-full"
+            aria-label="Wyszukaj kluby"
+          />
+        </form>
+        <Button onClick={onCreateClub}>
+          <Plus className="w-4 h-4 mr-2" />
+          Dodaj klub
+        </Button>
       </div>
 
       <div className="relative w-full overflow-auto">
